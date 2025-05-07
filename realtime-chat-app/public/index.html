@@ -1,0 +1,446 @@
+<!-- public/index.html -->
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplikasi Chat Real-time</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .chat-container {
+            max-width: 700px;
+            margin: 30px auto;
+            border: 1px solid #ddd;
+            box-shadow: 0 1px 11px rgba(0, 0, 0, 0.27);
+            border-radius: 8px;
+            height: 80vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .chat-header {
+            padding: 15px;
+            background-color: #4c84ff;
+            color: white;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 8px 8px 0 0;
+        }
+        
+        .message-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            background-color: #f5f5f5;
+        }
+        
+        .message-input-container {
+            padding: 15px;
+            border-top: 1px solid #ddd;
+            display: flex;
+            background-color: white;
+        }
+        
+        #message-input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            outline: none;
+            font-size: 14px;
+        }
+        
+        #send-button {
+            margin-left: 10px;
+            padding: 10px 15px;
+            border: none;
+            background-color: #4c84ff;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        #send-button:hover {
+            background-color: #3a70e0;
+        }
+        
+        .message {
+            padding: 10px 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+        
+        .user-message {
+            background-color: #e1f5fe;
+            margin-left: auto;
+            margin-right: 0;
+            border-bottom-right-radius: 0;
+        }
+        
+        .other-message {
+            background-color: white;
+            margin-left: 0;
+            margin-right: auto;
+            border-bottom-left-radius: 0;
+        }
+        
+        .notification {
+            text-align: center;
+            color: #777;
+            font-style: italic;
+            margin: 10px 0;
+            font-size: 12px;
+        }
+        
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 12px;
+            color: #555;
+        }
+        
+        .message-sender {
+            font-weight: bold;
+        }
+        
+        .message-timestamp {
+            color: #777;
+        }
+        
+        .status-container {
+            text-align: center;
+            padding: 10px;
+            background-color: #f8f8f8;
+            border-bottom: 1px solid #ddd;
+            font-size: 14px;
+            color: #333;
+        }
+        
+        #connection-status {
+            font-weight: bold;
+            color: #f44336;
+        }
+        
+        #connection-status.connected {
+            color: #4caf50;
+        }
+        
+        /* Username Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal-content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 400px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            text-align: center;
+        }
+        
+        .modal h2 {
+            color: #4c84ff;
+            margin-top: 0;
+        }
+        
+        .modal p {
+            margin-bottom: 20px;
+        }
+        
+        .modal input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        
+        .modal button {
+            padding: 10px 20px;
+            background-color: #4c84ff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        
+        .modal button:hover {
+            background-color: #3a70e0;
+        }
+        
+        .modal.show {
+            display: flex;
+        }
+    </style>
+</head>
+<body>
+    <!-- Username Modal -->
+    <div id="username-modal" class="modal">
+        <div class="modal-content">
+            <h2>Selamat Datang!</h2>
+            <p>Silakan masukkan nama Anda untuk bergabung ke obrolan</p>
+            <input type="text" id="username-input" placeholder="Masukkan nama Anda" maxlength="20">
+            <button id="join-chat-button">Bergabung</button>
+        </div>
+    </div>
+
+    <div class="chat-container">
+        <div class="chat-header">
+            Aplikasi Chat Real-time
+        </div>
+        <div class="status-container">
+            Status: <span id="connection-status">Menghubungkan...</span>
+        </div>
+        <div id="message-area" class="message-area"></div>
+        <div class="message-input-container">
+            <input type="text" id="message-input" placeholder="Ketik pesan..." autocomplete="off">
+            <button id="send-button">Kirim</button>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const messageArea = document.getElementById('message-area');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        const connectionStatus = document.getElementById('connection-status');
+        const usernameModal = document.getElementById('username-modal');
+        const usernameInput = document.getElementById('username-input');
+        const joinChatButton = document.getElementById('join-chat-button');
+        
+        // User data
+        let userId = null;
+        let userColor = null;
+        let username = null;
+        let isLoggedIn = false;
+        
+        // WebSocket connection
+        let socket = null;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+
+        // Connect to WebSocket
+        function connect() {
+            // Determine WebSocket URL (ws:// for HTTP, wss:// for HTTPS)
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}`;
+            
+            socket = new WebSocket(wsUrl);
+            
+            // Connection opened
+            socket.addEventListener('open', () => {
+                connectionStatus.textContent = 'Terhubung';
+                connectionStatus.classList.add('connected');
+                reconnectAttempts = 0;
+            });
+            
+            // Listen for messages
+            socket.addEventListener('message', (event) => {
+                const data = JSON.parse(event.data);
+                handleMessage(data);
+            });
+            
+            // Connection closed
+            socket.addEventListener('close', () => {
+                connectionStatus.textContent = 'Terputus';
+                connectionStatus.classList.remove('connected');
+                
+                // Try to reconnect
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    const timeout = Math.min(1000 * reconnectAttempts, 5000);
+                    connectionStatus.textContent = `Terputus. Mencoba menghubungkan kembali dalam ${timeout/1000} detik...`;
+                    
+                    setTimeout(() => {
+                        connect();
+                    }, timeout);
+                } else {
+                    connectionStatus.textContent = 'Gagal terhubung ke server setelah beberapa percobaan.';
+                    addNotification('Gagal terhubung ke server. Silakan muat ulang halaman untuk mencoba lagi.');
+                }
+            });
+            
+            // Error handling
+            socket.addEventListener('error', (error) => {
+                console.error('WebSocket error:', error);
+                addNotification('Terjadi kesalahan koneksi.');
+            });
+        }
+
+        // Handle incoming message
+        function handleMessage(data) {
+            switch (data.type) {
+                case 'request_username':
+                    // Show username modal
+                    usernameModal.classList.add('show');
+                    break;
+                
+                case 'connect':
+                    // Set user data
+                    userId = data.data.id;
+                    userColor = data.data.color;
+                    username = data.data.username;
+                    isLoggedIn = true;
+                    
+                    // Hide username modal if it's still showing
+                    usernameModal.classList.remove('show');
+                    
+                    // Enable chat interface
+                    messageInput.disabled = false;
+                    sendButton.disabled = false;
+                    
+                    addNotification(data.data.message);
+                    break;
+                
+                case 'message':
+                    // Display chat message
+                    const isMyMessage = data.data.id === userId;
+                    addMessage(data.data, isMyMessage);
+                    break;
+                
+                case 'notification':
+                    // Display notification
+                    addNotification(data.data.message);
+                    break;
+                
+                default:
+                    console.warn('Unknown message type:', data.type);
+            }
+        }
+
+        // Add message to chat
+        function addMessage(message, isMyMessage) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message');
+            messageElement.classList.add(isMyMessage ? 'user-message' : 'other-message');
+            
+            // Create message header
+            const messageHeader = document.createElement('div');
+            messageHeader.classList.add('message-header');
+            
+            // Message sender
+            const sender = document.createElement('span');
+            sender.classList.add('message-sender');
+            sender.style.color = message.color;
+            sender.textContent = isMyMessage ? 'Anda' : message.username || message.id;
+            
+            // Message timestamp
+            const timestamp = document.createElement('span');
+            timestamp.classList.add('message-timestamp');
+            timestamp.textContent = message.timestamp || new Date().toLocaleTimeString();
+            
+            // Add elements to DOM
+            messageHeader.appendChild(sender);
+            messageHeader.appendChild(timestamp);
+            
+            // Message content
+            const messageContent = document.createElement('div');
+            messageContent.classList.add('message-content');
+            messageContent.textContent = message.text;
+            
+            messageElement.appendChild(messageHeader);
+            messageElement.appendChild(messageContent);
+            messageArea.appendChild(messageElement);
+            
+            // Scroll to bottom
+            scrollToBottom();
+        }
+
+        // Add notification to chat
+        function addNotification(message) {
+            const notificationElement = document.createElement('div');
+            notificationElement.classList.add('notification');
+            notificationElement.textContent = message;
+            
+            messageArea.appendChild(notificationElement);
+            scrollToBottom();
+        }
+
+        // Scroll chat to bottom
+        function scrollToBottom() {
+            messageArea.scrollTop = messageArea.scrollHeight;
+        }
+
+        // Send message
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            
+            if (message && socket && socket.readyState === WebSocket.OPEN && isLoggedIn) {
+                // Send message to server
+                socket.send(JSON.stringify({
+                    text: message
+                }));
+                
+                // Clear input
+                messageInput.value = '';
+            }
+        }
+        
+        // Submit username
+        function submitUsername() {
+            const name = usernameInput.value.trim();
+            
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                // Send username to server
+                socket.send(JSON.stringify({
+                    type: 'username_submission',
+                    username: name
+                }));
+            }
+        }
+
+        // Event listeners
+        sendButton.addEventListener('click', sendMessage);
+        
+        messageInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        });
+        
+        joinChatButton.addEventListener('click', submitUsername);
+        
+        usernameInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                submitUsername();
+            }
+        });
+        
+        // Disable chat interface until logged in
+        messageInput.disabled = true;
+        sendButton.disabled = true;
+
+        // Initialize connection
+        connect();
+    </script>
+</body>
+</html>
