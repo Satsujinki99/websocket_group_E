@@ -1,0 +1,340 @@
+<!-- public/login.html -->
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp KW Super - Login</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+        }
+        
+        .auth-container {
+            max-width: 400px;
+            margin: 80px auto;
+            padding: 30px;
+            border-radius: 8px;
+            background-color: white;
+            box-shadow: 0 1px 11px rgba(0, 0, 0, 0.15);
+        }
+        
+        .auth-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .auth-header h1 {
+            color: #4c84ff;
+            margin-bottom: 10px;
+        }
+        
+        .auth-form {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #333;
+        }
+        
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        input[type="text"]:focus,
+        input[type="password"]:focus {
+            border-color: #4c84ff;
+            outline: none;
+        }
+        
+        button {
+            padding: 12px;
+            background-color: #4c84ff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #3a70e0;
+        }
+        
+        .auth-links {
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        .auth-links a {
+            color: #4c84ff;
+            text-decoration: none;
+        }
+        
+        .auth-links a:hover {
+            text-decoration: underline;
+        }
+        
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            font-weight: 500;
+            color: #777;
+        }
+        
+        .tab.active {
+            color: #4c84ff;
+            border-bottom: 2px solid #4c84ff;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .error-message {
+            background-color: #ffebee;
+            color: #f44336;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .success-message {
+            background-color: #e8f5e9;
+            color: #4caf50;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-header">
+            <h1>WhatsApp KW Super</h1>
+            <p>Masuk atau daftar untuk memulai percakapan</p>
+        </div>
+        
+        <div class="tabs">
+            <div class="tab active" data-tab="login">Masuk</div>
+            <div class="tab" data-tab="register">Daftar</div>
+        </div>
+        
+        <div class="error-message" id="error-message"></div>
+        <div class="success-message" id="success-message"></div>
+        
+        <div class="tab-content active" id="login-tab">
+            <form class="auth-form" id="login-form">
+                <div class="form-group">
+                    <label for="login-username">Nama Pengguna</label>
+                    <input type="text" id="login-username" placeholder="Masukkan nama pengguna Anda" required>
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Kata Sandi</label>
+                    <input type="password" id="login-password" placeholder="Masukkan kata sandi Anda" required>
+                </div>
+                <button type="submit">Masuk</button>
+            </form>
+        </div>
+        
+        <div class="tab-content" id="register-tab">
+            <form class="auth-form" id="register-form">
+                <div class="form-group">
+                    <label for="register-username">Nama Pengguna</label>
+                    <input type="text" id="register-username" placeholder="Pilih nama pengguna" required>
+                </div>
+                <div class="form-group">
+                    <label for="register-password">Kata Sandi</label>
+                    <input type="password" id="register-password" placeholder="Buat kata sandi" required>
+                </div>
+                <div class="form-group">
+                    <label for="register-confirm-password">Konfirmasi Kata Sandi</label>
+                    <input type="password" id="register-confirm-password" placeholder="Masukkan kembali kata sandi" required>
+                </div>
+                <button type="submit">Daftar</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const tabs = document.querySelectorAll('.tab');
+        const tabContents = document.querySelectorAll('.tab-content');
+        const loginForm = document.getElementById('login-form');
+        const registerForm = document.getElementById('register-form');
+        const errorMessage = document.getElementById('error-message');
+        const successMessage = document.getElementById('success-message');
+        
+        // Tab switching
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Remove active class from all tabs and contents
+                tabs.forEach(t => t.classList.remove('active'));
+                tabContents.forEach(c => c.classList.remove('active'));
+                
+                // Add active class to clicked tab and corresponding content
+                tab.classList.add('active');
+                document.getElementById(`${tab.dataset.tab}-tab`).classList.add('active');
+                
+                // Hide messages
+                errorMessage.style.display = 'none';
+                successMessage.style.display = 'none';
+            });
+        });
+        
+        // Show error message
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+            successMessage.style.display = 'none';
+        }
+        
+        // Show success message
+        function showSuccess(message) {
+            successMessage.textContent = message;
+            successMessage.style.display = 'block';
+            errorMessage.style.display = 'none';
+        }
+        
+        // Handle login form submission
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('login-username').value.trim();
+            const password = document.getElementById('login-password').value;
+            
+            // Basic validation
+            if (!username || !password) {
+                showError('Silakan isi semua bidang');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showSuccess(data.message);
+                    // Redirect to chat page
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 1000);
+                } else {
+                    showError(data.message);
+                }
+            } catch (error) {
+                showError('Terjadi kesalahan. Silakan coba lagi.');
+                console.error('Login error:', error);
+            }
+        });
+        
+        // Handle register form submission
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('register-username').value.trim();
+            const password = document.getElementById('register-password').value;
+            const confirmPassword = document.getElementById('register-confirm-password').value;
+            
+            // Basic validation
+            if (!username || !password || !confirmPassword) {
+                showError('Silakan isi semua bidang');
+                return;
+            }
+            
+            if (password !== confirmPassword) {
+                showError('Kata sandi tidak cocok');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showSuccess(data.message);
+                    // Redirect to chat page
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 1000);
+                } else {
+                    showError(data.message);
+                }
+            } catch (error) {
+                showError('Terjadi kesalahan. Silakan coba lagi.');
+                console.error('Register error:', error);
+            }
+        });
+        
+        // Check if user is already logged in
+        async function checkSession() {
+            try {
+                const response = await fetch('/api/session');
+                const data = await response.json();
+                
+                if (data.authenticated) {
+                    // Redirect to chat page
+                    window.location.href = '/';
+                }
+            } catch (error) {
+                console.error('Session check error:', error);
+            }
+        }
+        
+        // Check session on page load
+        checkSession();
+    </script>
+</body>
+</html>

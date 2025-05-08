@@ -33,10 +33,40 @@
             padding: 15px;
             background-color: #4c84ff;
             color: white;
-            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-radius: 8px 8px 0 0;
+        }
+        
+        .chat-title {
             font-size: 18px;
             font-weight: bold;
-            border-radius: 8px 8px 0 0;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+        }
+        
+        .user-name {
+            margin-right: 10px;
+            font-size: 14px;
+        }
+        
+        .logout-button {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 5px 10px;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        
+        .logout-button:hover {
+            background-color: rgba(255, 255, 255, 0.2);
         }
         
         .message-area {
@@ -130,6 +160,9 @@
             border-bottom: 1px solid #ddd;
             font-size: 14px;
             color: #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         
         #connection-status {
@@ -141,84 +174,24 @@
             color: #4caf50;
         }
         
-        /* Username Modal */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            justify-content: center;
-            align-items: center;
-        }
-        
-        .modal-content {
-            background-color: white;
-            padding: 30px;
-            border-radius: 8px;
-            width: 80%;
-            max-width: 400px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            text-align: center;
-        }
-        
-        .modal h2 {
-            color: #4c84ff;
-            margin-top: 0;
-        }
-        
-        .modal p {
-            margin-bottom: 20px;
-        }
-        
-        .modal input {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 20px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 16px;
-        }
-        
-        .modal button {
-            padding: 10px 20px;
-            background-color: #4c84ff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-size: 16px;
-            cursor: pointer;
-        }
-        
-        .modal button:hover {
-            background-color: #3a70e0;
-        }
-        
-        .modal.show {
-            display: flex;
+        .connection-count {
+            font-size: 12px;
+            color: #777;
         }
     </style>
 </head>
 <body>
-    <!-- Username Modal -->
-    <div id="username-modal" class="modal">
-        <div class="modal-content">
-            <h2>Selamat Datang!</h2>
-            <p>Silakan masukkan nama Anda untuk bergabung ke obrolan</p>
-            <input type="text" id="username-input" placeholder="Masukkan nama Anda" maxlength="20">
-            <button id="join-chat-button">Bergabung</button>
-        </div>
-    </div>
-
     <div class="chat-container">
         <div class="chat-header">
-            Aplikasi Chat Real-time
+            <div class="chat-title">WhatsApp KW Super</div>
+            <div class="user-info">
+                <span class="user-name" id="current-username">Loading...</span>
+                <button class="logout-button" id="logout-button">Keluar</button>
+            </div>
         </div>
         <div class="status-container">
-            Status: <span id="connection-status">Menghubungkan...</span>
+            <div>Status: <span id="connection-status">Menghubungkan...</span></div>
+            <div class="connection-count">Koneksi: <span id="connection-counter">0</span>/3</div>
         </div>
         <div id="message-area" class="message-area"></div>
         <div class="message-input-container">
@@ -233,26 +206,75 @@
         const messageInput = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
         const connectionStatus = document.getElementById('connection-status');
-        const usernameModal = document.getElementById('username-modal');
-        const usernameInput = document.getElementById('username-input');
-        const joinChatButton = document.getElementById('join-chat-button');
+        const connectionCounter = document.getElementById('connection-counter');
+        const currentUsername = document.getElementById('current-username');
+        const logoutButton = document.getElementById('logout-button');
         
         // User data
         let userId = null;
         let userColor = null;
         let username = null;
-        let isLoggedIn = false;
         
         // WebSocket connection
         let socket = null;
         let reconnectAttempts = 0;
+        let reconnectTimer = null;
         const maxReconnectAttempts = 5;
+
+        // First check if user is authenticated
+        async function checkAuthentication() {
+            try {
+                const response = await fetch('/api/session');
+                const data = await response.json();
+                
+                if (!data.authenticated) {
+                    // Redirect to login page
+                    window.location.href = '/login';
+                    return;
+                }
+                
+                // Update UI with username
+                currentUsername.textContent = data.username;
+                username = data.username;
+                
+                // Connect to WebSocket
+                connect();
+            } catch (error) {
+                console.error('Authentication check error:', error);
+                // Redirect to login page on error
+                window.location.href = '/login';
+            }
+        }
+        
+        // Handle logout
+        logoutButton.addEventListener('click', async () => {
+            try {
+                await fetch('/api/logout');
+                window.location.href = '/login';
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        });
 
         // Connect to WebSocket
         function connect() {
-            // Determine WebSocket URL (ws:// for HTTP, wss:// for HTTPS)
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}`;
+            // Clear any existing reconnect timers
+            if (reconnectTimer) {
+                clearTimeout(reconnectTimer);
+                reconnectTimer = null;
+            }
+            
+            // Update connection status
+            connectionStatus.textContent = 'Menghubungkan...';
+            connectionStatus.classList.remove('connected');
+            
+            // Determine WebSocket URL (wss:// for HTTPS)
+            const wsUrl = `wss://${window.location.host}`;
+            
+            // Close existing connection if any
+            if (socket) {
+                socket.close();
+            }
             
             socket = new WebSocket(wsUrl);
             
@@ -261,6 +283,10 @@
                 connectionStatus.textContent = 'Terhubung';
                 connectionStatus.classList.add('connected');
                 reconnectAttempts = 0;
+                
+                // Enable chat interface
+                messageInput.disabled = false;
+                sendButton.disabled = false;
             });
             
             // Listen for messages
@@ -270,22 +296,34 @@
             });
             
             // Connection closed
-            socket.addEventListener('close', () => {
+            socket.addEventListener('close', (event) => {
                 connectionStatus.textContent = 'Terputus';
                 connectionStatus.classList.remove('connected');
                 
-                // Try to reconnect
-                if (reconnectAttempts < maxReconnectAttempts) {
-                    reconnectAttempts++;
-                    const timeout = Math.min(1000 * reconnectAttempts, 5000);
-                    connectionStatus.textContent = `Terputus. Mencoba menghubungkan kembali dalam ${timeout/1000} detik...`;
-                    
-                    setTimeout(() => {
-                        connect();
-                    }, timeout);
-                } else {
-                    connectionStatus.textContent = 'Gagal terhubung ke server setelah beberapa percobaan.';
-                    addNotification('Gagal terhubung ke server. Silakan muat ulang halaman untuk mencoba lagi.');
+                // Disable chat interface
+                messageInput.disabled = true;
+                sendButton.disabled = true;
+                
+                // If connection was closed due to too many connections
+                if (event.code === 429) {
+                    addNotification('Terlalu banyak koneksi aktif (maksimal 3 per pengguna)');
+                    return;
+                }
+                
+                // Try to reconnect if not closed due to logout
+                if (event.code !== 1000) {
+                    if (reconnectAttempts < maxReconnectAttempts) {
+                        reconnectAttempts++;
+                        const timeout = Math.min(1000 * reconnectAttempts, 5000);
+                        connectionStatus.textContent = `Terputus. Mencoba menghubungkan kembali dalam ${timeout/1000} detik...`;
+                        
+                        reconnectTimer = setTimeout(() => {
+                            connect();
+                        }, timeout);
+                    } else {
+                        connectionStatus.textContent = 'Gagal terhubung ke server setelah beberapa percobaan.';
+                        addNotification('Gagal terhubung ke server. Silakan muat ulang halaman untuk mencoba lagi.');
+                    }
                 }
             });
             
@@ -299,26 +337,19 @@
         // Handle incoming message
         function handleMessage(data) {
             switch (data.type) {
-                case 'request_username':
-                    // Show username modal
-                    usernameModal.classList.add('show');
-                    break;
-                
                 case 'connect':
                     // Set user data
                     userId = data.data.id;
                     userColor = data.data.color;
                     username = data.data.username;
-                    isLoggedIn = true;
                     
-                    // Hide username modal if it's still showing
-                    usernameModal.classList.remove('show');
-                    
-                    // Enable chat interface
-                    messageInput.disabled = false;
-                    sendButton.disabled = false;
-                    
+                    // Add welcome notification
                     addNotification(data.data.message);
+                    break;
+                
+                case 'connection_count':
+                    // Update connection counter
+                    connectionCounter.textContent = data.data.count;
                     break;
                 
                 case 'message':
@@ -351,7 +382,7 @@
             const sender = document.createElement('span');
             sender.classList.add('message-sender');
             sender.style.color = message.color;
-            sender.textContent = isMyMessage ? 'Anda' : message.username || message.id;
+            sender.textContent = isMyMessage ? 'Anda' : message.username;
             
             // Message timestamp
             const timestamp = document.createElement('span');
@@ -394,7 +425,7 @@
         function sendMessage() {
             const message = messageInput.value.trim();
             
-            if (message && socket && socket.readyState === WebSocket.OPEN && isLoggedIn) {
+            if (message && socket && socket.readyState === WebSocket.OPEN) {
                 // Send message to server
                 socket.send(JSON.stringify({
                     text: message
@@ -402,19 +433,6 @@
                 
                 // Clear input
                 messageInput.value = '';
-            }
-        }
-        
-        // Submit username
-        function submitUsername() {
-            const name = usernameInput.value.trim();
-            
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                // Send username to server
-                socket.send(JSON.stringify({
-                    type: 'username_submission',
-                    username: name
-                }));
             }
         }
 
@@ -427,20 +445,30 @@
             }
         });
         
-        joinChatButton.addEventListener('click', submitUsername);
-        
-        usernameInput.addEventListener('keypress', (event) => {
-            if (event.key === 'Enter') {
-                submitUsername();
-            }
-        });
-        
-        // Disable chat interface until logged in
+        // Disable chat interface until connected
         messageInput.disabled = true;
         sendButton.disabled = true;
 
-        // Initialize connection
-        connect();
+        // Initialize
+        checkAuthentication();
+        
+        // Handle page visibility changes to optimize reconnection
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                // If the page is visible and we're not connected, try to reconnect
+                if (!socket || socket.readyState !== WebSocket.OPEN) {
+                    reconnectAttempts = 0; // Reset reconnect attempts
+                    connect();
+                }
+            }
+        });
+        
+        // Handle before unload to close connection cleanly
+        window.addEventListener('beforeunload', () => {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.close(1000, 'User left the page');
+            }
+        });
     </script>
 </body>
 </html>
