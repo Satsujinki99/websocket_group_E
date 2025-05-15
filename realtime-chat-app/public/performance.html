@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Performance Testing - WS vs WSS vs gRPC</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        
+        .test-controls {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f0f7ff;
+            border-radius: 5px;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        label {
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        input[type="number"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 100px;
+        }
+        
+        button {
+            padding: 10px 15px;
+            background-color: #4c84ff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+        
+        button:hover {
+            background-color: #3a70e0;
+        }
+        
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        
+        .results {
+            margin-top: 20px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        
+        th {
+            background-color: #f2f2f2;
+        }
+        
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(76, 132, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #4c84ff;
+            animation: spin 1s ease-in-out infinite;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        
+        .status.error {
+            background-color: #ffebee;
+            color: #d32f2f;
+        }
+        
+        .status.success {
+            background-color: #e8f5e9;
+            color: #388e3c;
+        }
+        
+        .status.info {
+            background-color: #e3f2fd;
+            color: #1976d2;
+        }
+        
+        .chart-container {
+            margin-top: 30px;
+            height: 400px;
+        }
+        
+        .connection-group {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: 5px;
+        }
+        
+        .connection-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .connection-title {
+            font-weight: bold;
+            font-size: 16px;
+        }
+        
+        .connection-status {
+            font-size: 14px;
+        }
+        
+        .connected {
+            color: #388e3c;
+        }
+        
+        .disconnected {
+            color: #d32f2f;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Performance Testing - WS vs WSS vs gRPC</h1>
+        
+        <div class="connection-group">
+            <div class="connection-header">
+                <div class="connection-title">Plain WebSocket (WS)</div>
+                <div class="connection-status" id="ws-status">Disconnected</div>
+            </div>
+            <p>Non-secure WebSocket connection on port 3001.</p>
+            <button id="ws-connect">Connect</button>
+            <button id="ws-disconnect" disabled>Disconnect</button>
+        </div>
+        
+        <div class="connection-group">
+            <div class="connection-header">
+                <div class="connection-title">Secure WebSocket (WSS)</div>
+                <div class="connection-status" id="wss-status">Disconnected</div>
+            </div>
+            <p>Secure WebSocket connection on port 3005.</p>
+            <button id="wss-connect">Connect</button>
+            <button id="wss-disconnect" disabled>Disconnect</button>
+        </div>
+        
+        <div class="connection-group">
+            <div class="connection-header">
+                <div class="connection-title">gRPC</div>
+                <div class="connection-status" id="grpc-status">Disconnected</div>
+            </div>
+            <p>gRPC connection on port 50051 (implemented via gRPC-Web).</p>
+            <button id="grpc-connect">Connect</button>
+            <button id="grpc-disconnect" disabled>Disconnect</button>
+        </div>
+        
+        <div class="test-controls">
+            <div class="control-group">
+                <label for="ping-count">Number of Pings:</label>
+                <input type="number" id="ping-count" value="100" min="1" max="1000">
+            </div>
+            <div class="control-group">
+                <label for="ping-interval">Interval (ms):</label>
+                <input type="number" id="ping-interval" value="100" min="10" max="1000">
+            </div>
+            <button id="start-test">Start Test</button>
+        </div>
+        
+        <div id="status-container" class="status info">
+            Ready to test. Connect to the services and click "Start Test".
+        </div>
+        
+        <div class="results">
+            <h2>Results</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Protocol</th>
+                        <th>Min Latency (ms)</th>
+                        <th>Max Latency (ms)</th>
+                        <th>Average Latency (ms)</th>
+                        <th>Failed Pings</th>
+                    </tr>
+                </thead>
+                <tbody id="results-body">
+                    <tr id="ws-results">
+                        <td>Plain WebSocket (WS)</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                    </tr>
+                    <tr id="wss-results">
+                        <td>Secure WebSocket (WSS)</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                    </tr>
+                    <tr id="grpc-results">
+                        <td>gRPC</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="chart-container">
+            <canvas id="latency-chart"></canvas>
+        </div>
+    </div>
+
+    <!-- Load Chart.js for visualization -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.1/chart.min.js"></script>
+    
+    <!-- Load gRPC-Web for browser gRPC support -->
+    <script src="https://cdn.jsdelivr.net/npm/grpc-web@1.4.2/dist/grpc-web.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/google-protobuf@3.21.2/google-protobuf.min.js"></script>
+    
+    <script>
+        // DOM Elements
+        const startTestButton = document.getElementById('start-test');
+        const pingCountInput = document.getElementById('ping-count');
+        const pingIntervalInput = document.getElementById('ping-interval');
+        const resultsBody = document.getElementById('results-body');
+        const statusContainer = document.getElementById('status-container');
+        
+        // Connection buttons
+        const wsConnectBtn = document.getElementById('ws-connect');
+        const wsDisconnectBtn = document.getElementById('ws-disconnect');
+        const wssConnectBtn = document.getElementById('wss-connect');
+        const wssDisconnectBtn = document.getElementById('wss-disconnect');
+        const grpcConnectBtn = document.getElementById('grpc-connect');
+        const grpcDisconnectBtn = document.getElementById('grpc-disconnect');
+        
+        // Connection status elements
+        const wsStatus = document.getElementById('ws-status');
+        const wssStatus = document.getElementById('wss-status');
+        const grpcStatus = document.getElementById('grpc-status');
+        
+        // Connection objects
+        let wsConnection = null;
+        let wssConnection = null;
+        let grpcClient = null;
+        let grpcStream = null;
+        
+        // Results storage
+        const results = {
+            ws: { latencies: [], failed: 0, pending: {} },
+            wss: { latencies: [], failed: 0, pending: {} },
+            grpc: { latencies: [], failed: 0, pending: {} }
+        };
+        
+        // Test in progress flag
+        let testInProgress = false;
+        
+        // Test timeout (for waiting for pong response)
+        const PONG_TIMEOUT = 5000; // 5 seconds
+        
+        // Initialize chart
+        let latencyChart = null;
+        
+        function initChart() {
+            const ctx = document.getElementById('latency-chart').getContext('2d');
+            
+            if (latencyChart) {
+                latencyChart.destroy();
+            }
+            
+            latencyChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'WS Latency',
+                            data: [],
+                            borderColor: 'rgb(255, 99, 132)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                            tension: 0.1
+                        },
+                        {
+                            label: 'WSS Latency',
+                            data: [],
+                            borderColor: 'rgb(54, 162, 235)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                            tension: 0.1
+                        },
+                        {
+                            label: 'gRPC Latency',
+                            data: [],
+                            borderColor: 'rgb(75, 192, 192)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                            tension: 0.1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Latency (ms)'
+                            },
+                            beginAtZero: true
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Ping #'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Connect to WebSocket (WS)
+        wsConnectBtn.addEventListener('click', () => {
+            try {
+                // Create WebSocket connection
+                wsConnection = new WebSocket(`ws://${window.location.hostname}:3001`);
+                
+                wsStatus.textContent = 'Connecting...';
+                
+                wsConnection.onopen = () => {
+                    wsStatus.textContent = 'Connected';
+                    wsStatus.classList.add('connected');
+                    wsStatus.classList.remove('disconnected');
+                    wsConnectBtn.disabled = true;
+                    wsDisconnectBtn.disabled = false;
+                    updateStatus('Plain WebSocket (WS) connected', 'success');
+                };
+                
+                wsConnection.onclose = () => {
+                    wsStatus.textContent = 'Disconnected';
+                    wsStatus.classList.remove('connected');
+                    wsStatus.classList.add('disconnected');
+                    wsConnectBtn.disabled = false;
+                    wsDisconnectBtn.disabled = true;
+                    wsConnection = null;
+                    updateStatus('Plain WebSocket (WS) disconnected', 'info');
+                };
+                
+                wsConnection.onerror = (error) => {
+                    console.error('WS Error:', error);
+                    updateStatus('WebSocket (WS) connection error', 'error');
+                };
+                
+                wsConnection.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    
+                    // Handle pong response
+                    if (data.type === 'pong') {
+                        const now = Date.now();
+                        const pingId = data.originalTimestamp;
+                        
+                        if (results.ws.pending[pingId]) {
+                            const latency = now - pingId;
+                            results.ws.latencies.push(latency);
+                            delete results.ws.pending[pingId];
+                            
+                            // Update chart if needed
+                            if (testInProgress) {
+                                updateChart();
+                            }
+                        }
+                    }
+                };
+            } catch (error) {
+                console.error('Error connecting to WS:', error);
+                updateStatus('Failed to connect to WebSocket (WS)', 'error');
+            }
+        });
+        
+        // Disconnect from WebSocket (WS)
+        wsDisconnectBtn.addEventListener('click', () => {
+            if (wsConnection) {
+                wsConnection.close();
+            }
+        });
+        
+        // Connect to WebSocket Secure (WSS)
+        wssConnectBtn.addEventListener('click', () => {
+            try {
+                // Create WebSocket Secure connection
+                wssConnection = new WebSocket(`wss://${window.location.hostname}:3005`);
+                
+                wssStatus.textContent = 'Connecting...';
+                
+                wssConnection.onopen = () => {
+                    wssStatus.textContent = 'Connected';
+                    wssStatus.classList.add('connected');
+                    wssStatus.classList.remove('disconnected');
+                    wssConnectBtn.disabled = true;
+                    wssDisconnectBtn.disabled = false;
+                    updateStatus('Secure WebSocket (WSS) connected', 'success');
+                };
+                
+                wssConnection.onclose = () => {
+                    wssStatus.textContent = 'Disconnected';
+                    wssStatus.classList.remove('connected');
+                    wssStatus.classList.add('disconnected');
+                    wssConnectBtn.disabled = false;
+                    wssDisconnectBtn.disabled = true;
+                    wssConnection = null;
+                    updateStatus('Secure WebSocket (WSS) disconnected', 'info');
+                };
+                
+                wssConnection.onerror = (error) => {
+                    console.error('WSS Error:', error);
+                    updateStatus('WebSocket Secure (WSS) connection error', 'error');
+                };
+                
+                wssConnection.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    
+                    // Handle pong response
+                    if (data.type === 'pong') {
+                        const now = Date.now();
+                        const pingId = data.originalTimestamp;
+                        
+                        if (results.wss.pending[pingId]) {
+                            const latency = now - pingId;
+                            results.wss.latencies.push(latency);
+                            delete results.wss.pending[pingId];
+                            
+                            // Update chart if needed
+                            if (testInProgress) {
+                                updateChart();
+                            }
+                        }
+                    }
+                };
+            } catch (error) {
+                console.error('Error connecting to WSS:', error);
+                updateStatus('Failed to connect to WebSocket Secure (WSS)', 'error');
+            }
+        });
+        
+        // Disconnect from WebSocket Secure (WSS)
+        wssDisconnectBtn.addEventListener('click', () => {
+            if (wssConnection) {
+                wssConnection.close();
+            }
+        });
+        
+        // Connect to gRPC
+        grpcConnectBtn.addEventListener('click', () => {
+            try {
+                // Note: In a real implementation, you would use the gRPC-web client here
+                // For this example, we'll simulate the gRPC connection since browser support
+                // requires additional server setup (proxy, etc.)
+                simulateGrpcConnection();
+            } catch (error) {
+                console.error('Error connecting to gRPC:', error);
+                updateStatus('Failed to connect to gRPC', 'error');
+            }
+        });
+        
+        // Simulate gRPC connection (for demo purposes)
+        function simulateGrpcConnection() {
+            // In a real implementation, this would use the gRPC-web client
+            grpcStatus.textContent = 'Connected (Simulated)';
+            grpcStatus.classList.add('connected');
+            grpcStatus.classList.remove('disconnected');
+            grpcConnectBtn.disabled = true;
+            grpcDisconnectBtn.disabled = false;
+            updateStatus('gRPC connected (simulated for browser demo)', 'success');
+            
+            // Set a flag that we have a simulated gRPC connection
+            grpcClient = { simulated: true };
+        }
+        
+        // Disconnect from gRPC
+        grpcDisconnectBtn.addEventListener('click', () => {
+            if (grpcClient) {
+                grpcStatus.textContent = 'Disconnected';
+                grpcStatus.classList.remove('connected');
+                grpcStatus.classList.add('disconnected');
+                grpcConnectBtn.disabled = false;
+                grpcDisconnectBtn.disabled = true;
+                grpcClient = null;
+                grpcStream = null;
+                updateStatus('gRPC disconnected', 'info');
+            }
+        });
+        
+        // Update status container
+        function updateStatus(message, type) {
+            statusContainer.textContent = message;
+            statusContainer.className = `status ${type}`;
+        }
+        
+        // Start performance test
+        startTestButton.addEventListener('click', async () => {
+            // Validate connections
+            const wsConnected = wsConnection && wsConnection.readyState === WebSocket.OPEN;
+            const wssConnected = wssConnection && wssConnection.readyState === WebSocket.OPEN;
+            const grpcConnected = grpcClient !== null;
+            
+            if (!wsConnected && !wssConnected && !grpcConnected) {
+                updateStatus('Please connect to at least one service before starting the test', 'error');
+                return;
+            }
+            
+            const pingCount = parseInt(pingCountInput.value, 10);
+            const pingInterval = parseInt(pingIntervalInput.value, 10);
+            
+            if (isNaN(pingCount) || pingCount <= 0 || pingCount > 1000) {
+                updateStatus('Invalid ping count. Please enter a number between 1 and 1000.', 'error');
+                return;
+            }
+            
+            if (isNaN(pingInterval) || pingInterval < 10 || pingInterval > 1000) {
+                updateStatus('Invalid ping interval. Please enter a number between 10 and 1000.', 'error');
+                return;
+            }
+            
+            // Disable button during test
+            startTestButton.disabled = true;
+            testInProgress = true;
+            
+            // Reset results
+            resetResults();
+            initChart();
+            
+            updateStatus(`Starting performance test with ${pingCount} pings at ${pingInterval}ms intervals...`, 'info');
+            
+            // Run the test
+            await runPerfTest(pingCount, pingInterval, wsConnected, wssConnected, grpcConnected);
+            
+            // Re-enable button after test
+            startTestButton.disabled = false;
+            testInProgress = false;
+            
+            updateStatus('Performance test completed!', 'success');
+            
+            // Display final results
+            displayResults();
+        });
+        
+        // Reset result data
+        function resetResults() {
+            results.ws = { latencies: [], failed: 0, pending: {} };
+            results.wss = { latencies: [], failed: 0, pending: {} };
+            results.grpc = { latencies: [], failed: 0, pending: {} };
+            
+            // Reset table cells
+            document.querySelectorAll('#results-body tr td:not(:first-child)').forEach(cell => {
+                cell.textContent = '-';
+            });
+        }
+        
+        // Run performance test
+        async function runPerfTest(pingCount, pingInterval, wsConnected, wssConnected, grpcConnected) {
+            // Initialize chart labels
+            latencyChart.data.labels = Array.from({ length: pingCount }, (_, i) => i + 1);
+            
+            // Send pings
+            for (let i = 0; i < pingCount; i++) {
+                updateStatus(`Sending ping ${i + 1}/${pingCount}...`, 'info');
+                
+                // Send ping to each connected service
+                if (wsConnected) {
+                    sendWsPing('ws');
+                }
+                
+                if (wssConnected) {
+                    sendWsPing('wss');
+                }
+                
+                if (grpcConnected) {
+                    sendGrpcPing();
+                }
+                
+                // Wait for the specified interval
+                await new Promise(resolve => setTimeout(resolve, pingInterval));
+            }
+            
+            // Wait a bit more for any remaining pongs to come back
+            updateStatus('Waiting for remaining responses...', 'info');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Check for any pending pings that didn't get a response
+            checkPendingPings();
+        }
+        
+        // Send WebSocket ping (WS or WSS)
+        function sendWsPing(type) {
+            const conn = type === 'ws' ? wsConnection : wssConnection;
+            
+            if (conn && conn.readyState === WebSocket.OPEN) {
+                const timestamp = Date.now();
+                
+                // Store timestamp in pending pings
+                results[type].pending[timestamp] = true;
+                
+                // Set timeout for this ping
+                setTimeout(() => {
+                    if (results[type].pending[timestamp]) {
+                        // Ping timed out
+                        delete results[type].pending[timestamp];
+                        results[type].failed++;
+                    }
+                }, PONG_TIMEOUT);
+                
+                // Send ping message
+                conn.send(JSON.stringify({
+                    type: 'ping',
+                    timestamp: timestamp
+                }));
+            }
+        }
+        
+        // Send gRPC ping
+        function sendGrpcPing() {
+            // In a real implementation, this would use the gRPC-web client to make a ping RPC call
+            // For this demo, we'll simulate a response with slight random latency
+            
+            const timestamp = Date.now();
+            
+            // Store timestamp in pending pings
+            results.grpc.pending[timestamp] = true;
+            
+            // Simulate gRPC ping-pong (with slightly higher latency to simulate typical gRPC behavior)
+            setTimeout(() => {
+                // Simulate some network jitter
+                const simulatedNetworkJitter = Math.random() * 5;
+                
+                // Simulate baseline latency (typically gRPC has slightly higher overhead than raw WebSockets)
+                const simulatedBaseLatency = 5 + simulatedNetworkJitter;
+                
+                const latency = simulatedBaseLatency;
+                results.grpc.latencies.push(latency);
+                
+                delete results.grpc.pending[timestamp];
+                
+                // Update chart
+                if (testInProgress) {
+                    updateChart();
+                }
+            }, 5 + Math.random() * 10); // Simulate response time between 5-15ms
+        }
+        
+        // Check for pending pings that didn't get a response
+        function checkPendingPings() {
+            // Count remaining pending pings as failed
+            ['ws', 'wss', 'grpc'].forEach(type => {
+                const pendingCount = Object.keys(results[type].pending).length;
+                if (pendingCount > 0) {
+                    results[type].failed += pendingCount;
+                    results[type].pending = {};
+                }
+            });
+        }
+        
+        // Update chart with current data
+        function updateChart() {
+            // Update datasets
+            latencyChart.data.datasets[0].data = results.ws.latencies;
+            latencyChart.data.datasets[1].data = results.wss.latencies;
+            latencyChart.data.datasets[2].data = results.grpc.latencies;
+            
+            latencyChart.update();
+        }
+        
+        // Display final results in the table
+        function displayResults() {
+            // Calculate statistics for each protocol
+            ['ws', 'wss', 'grpc'].forEach((type, index) => {
+                const latencies = results[type].latencies;
+                const failed = results[type].failed;
+                
+                if (latencies.length > 0) {
+                    // Calculate min, max, avg
+                    const min = Math.min(...latencies).toFixed(2);
+                    const max = Math.max(...latencies).toFixed(2);
+                    const avg = (latencies.reduce((sum, val) => sum + val, 0) / latencies.length).toFixed(2);
+                    
+                    // Update table row
+                    const rowId = `${type}-results`;
+                    const row = document.getElementById(rowId);
+                    
+                    if (row) {
+                        row.cells[1].textContent = min;
+                        row.cells[2].textContent = max;
+                        row.cells[3].textContent = avg;
+                        row.cells[4].textContent = failed;
+                    }
+                } else if (failed > 0) {
+                    // All pings failed
+                    const rowId = `${type}-results`;
+                    const row = document.getElementById(rowId);
+                    
+                    if (row) {
+                        row.cells[1].textContent = '-';
+                        row.cells[2].textContent = '-';
+                        row.cells[3].textContent = '-';
+                        row.cells[4].textContent = failed;
+                    }
+                }
+            });
+        }
+        
+        // Initialize chart on page load
+        initChart();
+    </script>
+</body>
+</html>

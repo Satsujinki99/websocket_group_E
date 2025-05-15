@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package chat;
+
+service ChatService {
+  // Bidirectional streaming RPC for real-time chat
+  rpc Chat(stream ChatMessage) returns (stream ChatMessage) {}
+  
+  // Simple RPC for ping/pong latency testing
+  rpc Ping(PingRequest) returns (PingResponse) {}
+}
+
+message ChatMessage {
+  string type = 1;         // Type of message (auth, message, ping, pong, connect)
+  string userId = 2;       // User ID
+  string username = 3;     // Username
+  string message = 4;      // Message content
+  int64 timestamp = 5;     // Timestamp
+  int64 originalTimestamp = 6; // Original timestamp for ping/pong
+}
+
+message PingRequest {
+  string type = 1;
+  int64 timestamp = 2;
+}
+
+message PingResponse {
+  string type = 1;
+  int64 timestamp = 2;
+  int64 originalTimestamp = 3;
+}
